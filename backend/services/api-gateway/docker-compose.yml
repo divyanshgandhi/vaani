@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - APP_ENV=development
+      - LOG_LEVEL=debug
+      # Rate limiting configuration
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS_PER_SECOND=5
+      - RATE_LIMIT_RESET_AFTER_SECONDS=60
+      # Firebase configuration
+      - FIREBASE_PROJECT_ID=your-project-id
+      - FIREBASE_CREDENTIALS_FILE=/app/credentials/firebase-service-account.json
+      # Uncomment for local Firebase emulator
+      # - FIREBASE_USE_EMULATOR=true
+      # - FIREBASE_AUTH_EMULATOR_HOST=host.docker.internal:9099
+      # - FIREBASE_FIRESTORE_EMULATOR_HOST=host.docker.internal:8080
+    volumes:
+      - ./:/app
+    restart: unless-stopped

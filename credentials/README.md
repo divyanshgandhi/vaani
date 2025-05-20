@@ -1,0 +1,1 @@
+ Demo credentials for firebase, use it in the backend/services/api-gateway/credentials/firebase-service-account.json file.
