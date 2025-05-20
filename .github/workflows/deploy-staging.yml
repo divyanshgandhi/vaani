@@ -1,0 +1,129 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build and push API Gateway
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/services/api-gateway
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api-gateway:staging
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - name: Build and push Orpheus Inference
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/services/orpheus-inference
+          push: true
+          tags: ghcr.io/${{ github.repository }}/orpheus-inference:staging
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - name: Build and push Bulbul Adapter
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/services/bulbul-adapter
+          push: true
+          tags: ghcr.io/${{ github.repository }}/bulbul-adapter:staging
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - name: Build and push Media Service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./backend/services/media-service
+          push: true
+          tags: ghcr.io/${{ github.repository }}/media-service:staging
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      # Move cache
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  deploy-terraform:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.6
+
+      - name: Terraform Init
+        run: |
+          cd backend/infra/terraform
+          terraform init
+          terraform workspace select staging || terraform workspace new staging
+
+      - name: Terraform Apply
+        run: |
+          cd backend/infra/terraform
+          terraform apply -auto-approve
+        env:
+          TF_VAR_image_tag: staging
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  deploy-web:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.x"
+          channel: "stable"
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Install dependencies
+        run: cd frontend && melos bs
+
+      - name: Build Web
+        run: |
+          cd frontend/app
+          flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+          channelId: staging
+          projectId: vaani-app
+          entryPoint: ./frontend/app

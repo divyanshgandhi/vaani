@@ -1,0 +1,50 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Vaani Frontend Architecture
+
+The Vaani frontend is built using Flutter 3.19 with BLoC pattern for state management. The application targets mobile (Android/iOS) and web platforms.
+
+## Project Structure
+
+- **app/** - Main Flutter application
+- **packages/** - Shared Dart packages
+  - **ui_kit/** - UI components and themes
+  - **vaani_models/** - Data models and API client
+
+## Workspace Management
+
+The frontend uses Melos for workspace management. The configuration is in [melos.yaml](mdc:frontend/melos.yaml).
+
+## Docker Configuration
+
+For production, the web application is containerized using Docker. The [Dockerfile](mdc:frontend/Dockerfile) builds the Flutter application and serves it using Nginx.
+
+## Local Development
+
+For local development, you can use:
+
+```bash
+# Setup workspace
+cd frontend && melos bs
+
+# Run web app in development mode
+cd frontend && melos run webdev
+
+# Run tests
+cd frontend && melos test
+```
+
+## CI/CD Workflows
+
+Frontend CI/CD is handled by GitHub Actions workflows:
+
+- [ci-flutter.yml](mdc:.github/workflows/ci-flutter.yml) - Tests and builds frontend code on PRs
+- [deploy-staging.yml](mdc:.github/workflows/deploy-staging.yml) - Deploys web app to staging Firebase Hosting
+- [release.yml](mdc:.github/workflows/release.yml) - Deploys to production Firebase Hosting and builds mobile apps
+
+## API Integration
+
+The frontend communicates with the backend API Gateway service. It uses generated Dart code from Protocol Buffers for type-safe API calls.

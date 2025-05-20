@@ -1,0 +1,46 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Vaani Backend Architecture
+
+The Vaani backend is built using Go 1.22 with a microservices architecture. Each service is containerized and can be deployed independently.
+
+## Key Services
+
+- **API Gateway** [api-gateway](mdc:backend/services/api-gateway/Dockerfile) - Entry point for client requests, handles routing, authentication, and request validation
+- **Media Service** [media-service](mdc:backend/services/media-service/Dockerfile) - Manages audio file storage, processing, and delivery
+- **Bulbul Adapter** [bulbul-adapter](mdc:backend/services/bulbul-adapter/Dockerfile) - Integration with Bulbul API for voice transformation
+- **Orpheus Inference** [orpheus-inference](mdc:backend/services/orpheus-inference/Dockerfile) - Voice synthesis/recognition using the Orpheus ML model
+
+## Service Communication
+
+Services communicate via gRPC using Protocol Buffers. The API definitions are stored in [shared/proto](mdc:shared/proto/gen.sh) and generated into both Go and Dart code.
+
+## Docker Configuration
+
+All services are containerized using Docker. The Docker Compose file [docker-compose.yml](mdc:backend/infra/docker/docker-compose.yml) allows for local development with all services running together.
+
+## Local Development
+
+For local development, you can use:
+
+```bash
+# Start all backend services locally
+cd backend && make dev-up
+
+# Run tests
+cd backend && make test
+
+# Build Docker images
+cd backend && make docker
+```
+
+## CI/CD Workflows
+
+Backend CI/CD is handled by GitHub Actions workflows:
+
+- [ci-go.yml](mdc:.github/workflows/ci-go.yml) - Tests and builds backend code on PRs
+- [deploy-staging.yml](mdc:.github/workflows/deploy-staging.yml) - Deploys to staging on merge to main
+- [release.yml](mdc:.github/workflows/release.yml) - Deploys to production on release tags

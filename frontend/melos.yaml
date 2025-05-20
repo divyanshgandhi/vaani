@@ -1,0 +1,31 @@
+name: vaani_flutter
+repository: https://github.com/navoday/vaani
+
+packages:
+  - app
+  - packages/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  test:
+    run: melos exec -- flutter test
+    description: Run tests for all packages
+
+  analyze:
+    run: melos exec -- flutter analyze
+    description: Run analyzer for all packages
+
+  format:
+    run: melos exec -- dart format lib/
+    description: Format all code
+
+  clean:
+    run: melos exec -- flutter clean
+    description: Clean all build artifacts
+
+  webdev:
+    run: cd app && flutter run -d chrome --web-renderer canvaskit
+    description: Run web app in development mode 

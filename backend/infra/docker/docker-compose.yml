@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  api-gateway:
+    build:
+      context: ../../services/api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - ORPHEUS_SERVICE_URL=http://orpheus-inference:8081
+      - BULBUL_ADAPTER_URL=http://bulbul-adapter:8082
+      - MEDIA_SERVICE_URL=http://media-service:8083
+    depends_on:
+      - orpheus-inference
+      - bulbul-adapter
+      - media-service
+
+  orpheus-inference:
+    build:
+      context: ../../services/orpheus-inference
+    ports:
+      - "8081:8081"
+
+  bulbul-adapter:
+    build:
+      context: ../../services/bulbul-adapter
+    ports:
+      - "8082:8082"
+
+  media-service:
+    build:
+      context: ../../services/media-service
+    ports:
+      - "8083:8083"
+    volumes:
+      - media_data:/app/data
+
+volumes:
+  media_data:

@@ -1,0 +1,60 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Vaani Docker and Deployment
+
+Vaani uses Docker for containerization and GitHub Actions for CI/CD. The deployment process is fully automated for both staging and production environments.
+
+## Docker Configuration
+
+### Backend Services
+
+Each backend service has its own Dockerfile:
+
+- [API Gateway](mdc:backend/services/api-gateway/Dockerfile)
+- [Media Service](mdc:backend/services/media-service/Dockerfile)
+- [Bulbul Adapter](mdc:backend/services/bulbul-adapter/Dockerfile)
+- [Orpheus Inference](mdc:backend/services/orpheus-inference/Dockerfile)
+
+For local development, all services are orchestrated using [docker-compose.yml](mdc:backend/infra/docker/docker-compose.yml).
+
+### Frontend Web
+
+The Flutter web application is containerized using [Dockerfile](mdc:frontend/Dockerfile) which:
+1. Builds the Flutter web app
+2. Serves it using Nginx
+
+## Deployment Process
+
+### GitHub Actions Workflows
+
+- [ci-go.yml](mdc:.github/workflows/ci-go.yml) - Tests and lints Go code on PRs
+- [ci-flutter.yml](mdc:.github/workflows/ci-flutter.yml) - Tests and builds Flutter web on PRs
+- [deploy-staging.yml](mdc:.github/workflows/deploy-staging.yml) - Deploys to staging on merge to main
+- [release.yml](mdc:.github/workflows/release.yml) - Deploys to production on release tags
+
+### Docker Registry
+
+Docker images are pushed to GitHub Container Registry (ghcr.io) with tags:
+- `staging` for staging environment
+- Version number (e.g., `v1.0.0`) and `latest` for production
+
+### Infrastructure as Code
+
+Terraform is used to manage infrastructure. The Terraform configurations are stored in `backend/infra/terraform/` and use workspaces for different environments:
+- `staging` for staging environment
+- `prod` for production environment
+
+### Web Deployment
+
+The web application is deployed to Firebase Hosting:
+- Staging: on merge to main
+- Production: on release tags
+
+### Mobile App Deployment
+
+Mobile apps (Android AAB, iOS IPA) are built on release tags and uploaded as build artifacts, ready for distribution to:
+- Play Store internal track
+- TestFlight beta

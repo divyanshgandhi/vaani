@@ -1,0 +1,52 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Vaani Project Overview
+
+Vaani is a multilingual voice AI platform that uses advanced ML models for voice synthesis, recognition, and transformation. This monorepo contains both backend (Go) and frontend (Flutter) code.
+
+## Repository Structure
+
+The project follows a monorepo structure with clear separation between backend and frontend code:
+
+```
+vaani/
+├─ backend/                  # All server-side code & infra
+│   ├─ services/             # Deployable Go binaries
+│   │   ├─ api-gateway/      # API Gateway service
+│   │   ├─ media-service/    # Media handling service
+│   │   ├─ bulbul-adapter/   # Bulbul adapter service
+│   │   └─ orpheus-inference/# Orpheus inference service
+│   ├─ libs/                 # Reusable Go pkgs (logger, auth, sdk)
+│   ├─ infra/                # Terraform, Dockerfiles, bash helpers
+│   └─ Makefile              # Backend build commands
+│
+├─ frontend/                 # Single Flutter workspace
+│   ├─ app/                  # Flutter client (Android/iOS/Web)
+│   └─ packages/             # Shared Dart pkgs (ui_kit, data_models)
+│
+├─ shared/                   # Assets & specifications
+│   ├─ proto/                # .proto files for service contracts
+│   └─ design/               # Figma exports, brand assets
+│
+├─ .github/                  # CI/CD workflows & templates
+├─ docs/                     # Documentation
+├─ taskfiles/                # Taskfile.yml for uniform CLI tasks
+└─ .config/                  # Lint configs, commitlint, etc.
+```
+
+## Key Documentation
+
+- [Project Monorepo Structure](mdc:docs/vaani-monorepo.md) - Detailed monorepo structure
+- [Backend Architecture](mdc:docs/vaani-backend.md) - Backend services architecture
+- [Frontend Architecture](mdc:docs/vaani-frontend.md) - Frontend application architecture
+- [Product Requirements](mdc:docs/vaani-prd.md) - Product requirements document
+
+## Primary Technologies
+
+- **Backend**: Go 1.22, gRPC, PostgreSQL
+- **Frontend**: Flutter 3.19, Dart, BLoC pattern
+- **Infrastructure**: Docker, Terraform, GitHub Actions
+- **DevOps**: Task/Taskfile.yml, Melos (for Flutter workspace)

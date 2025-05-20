@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push Docker images
+        run: |
+          for service in api-gateway orpheus-inference bulbul-adapter media-service; do
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --push \
+              -t ghcr.io/${{ github.repository }}/${service}:${{ steps.extract_version.outputs.VERSION }} \
+              -t ghcr.io/${{ github.repository }}/${service}:latest \
+              ./backend/services/${service}
+          done
+
+  deploy-production:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.6
+
+      - name: Extract version
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init
+        run: |
+          cd backend/infra/terraform
+          terraform init
+          terraform workspace select prod || terraform workspace new prod
+
+      - name: Terraform Apply
+        run: |
+          cd backend/infra/terraform
+          terraform apply -auto-approve
+        env:
+          TF_VAR_image_tag: ${{ steps.extract_version.outputs.VERSION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  build-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.x"
+          channel: "stable"
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Install dependencies
+        run: cd frontend && melos bs
+
+      - name: Build Android AAB
+        run: |
+          cd frontend/app
+          flutter build appbundle
+
+      - name: Upload Android Build
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-build
+          path: frontend/app/build/app/outputs/bundle/release/app-release.aab
+
+  deploy-web-prod:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.x"
+          channel: "stable"
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Install dependencies
+        run: cd frontend && melos bs
+
+      - name: Build Web
+        run: |
+          cd frontend/app
+          flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+          channelId: live
+          projectId: vaani-app
+          entryPoint: ./frontend/app

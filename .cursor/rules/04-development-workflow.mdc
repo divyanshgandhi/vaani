@@ -1,0 +1,79 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Vaani Development Workflow
+
+Vaani uses a consistent development workflow across the monorepo, facilitated by Taskfile for unified commands.
+
+## Getting Started
+
+1. **Prerequisites**:
+   - Go 1.22+
+   - Flutter 3.19+
+   - Docker & Docker Compose
+   - Task (taskfile.dev)
+   - Melos
+
+2. **Initial Setup**:
+   ```bash
+   # Clone the repository
+   git clone git@github.com:navoday/vaani.git
+   cd vaani
+
+   # Bootstrap the project
+   task bootstrap
+   ```
+
+## Task Commands
+
+The project uses [Taskfile.yml](mdc:taskfiles/Taskfile.yml) for unified commands:
+
+```bash
+# Run all tests
+task test:all
+
+# Start backend services
+task dev:backend
+
+# Start frontend web app
+task dev:frontend
+
+# Generate protobuf code
+task proto:gen
+
+# Clean all build artifacts
+task clean
+```
+
+## Git Workflow
+
+1. Create a feature branch from `main`
+2. Make changes and ensure tests pass with `task test:all`
+3. Create a pull request to `main`
+4. After approval and merge, changes are automatically deployed to staging
+5. For production releases, create and push a tag (e.g., `git tag v1.0.0 && git push --tags`)
+
+## CI/CD Pipeline
+
+The CI/CD pipeline is managed through GitHub Actions:
+
+1. **PR Checks**: Tests and builds
+2. **Merge to Main**: Deploy to staging
+3. **Release Tag**: Deploy to production
+
+## Docker Development
+
+For local development using Docker:
+
+```bash
+# Start the entire stack
+cd backend && make dev-up
+
+# View logs
+docker-compose -f backend/infra/docker/docker-compose.yml logs -f
+
+# Stop the stack
+cd backend && make dev-down
+```

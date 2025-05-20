@@ -1,0 +1,69 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: backend
+  FRONTEND_DIR: frontend
+
+tasks:
+  bootstrap:
+    desc: "Setup the entire project"
+    cmds:
+      - go install github.com/go-task/task/v3/cmd/task@latest
+      - go install
+      - cd {{.FRONTEND_DIR}} && dart pub global activate melos && melos bs
+      - direnv allow
+
+  test:all:
+    desc: "Run all tests (Go + Dart)"
+    cmds:
+      - task: test:backend
+      - task: test:frontend
+
+  test:backend:
+    desc: "Run backend tests"
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - make test
+
+  test:frontend:
+    desc: "Run frontend tests"
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - melos test
+
+  dev:backend:
+    desc: "Start backend services locally"
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - make dev-up
+
+  dev:frontend:
+    desc: "Start frontend development server"
+    dir: "{{.FRONTEND_DIR}}/app"
+    cmds:
+      - flutter run -d chrome
+
+  proto:gen:
+    desc: "Generate protobuf code for all services"
+    dir: "shared/proto"
+    cmds:
+      - ./gen.sh
+
+  clean:
+    desc: "Clean all build artifacts"
+    cmds:
+      - task: clean:backend
+      - task: clean:frontend
+
+  clean:backend:
+    desc: "Clean backend build artifacts"
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - go clean
+      - rm -rf bin/ dist/
+
+  clean:frontend:
+    desc: "Clean frontend build artifacts"
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - melos clean 
