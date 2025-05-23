@@ -18,7 +18,7 @@ import (
 )
 
 // Setup initializes and returns the full application router
-func Setup(cfg *config.AppConfig, logger *zap.Logger, jobRepository *database.FirestoreJobRepository) http.Handler {
+func Setup(cfg *config.AppConfig, logger *zap.Logger, jobRepository *database.FirestoreJobRepository, projectRepository *database.FirestoreProjectRepository) http.Handler {
 	r := chi.NewRouter()
 
 	// Middleware
@@ -43,6 +43,10 @@ func Setup(cfg *config.AppConfig, logger *zap.Logger, jobRepository *database.Fi
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	// Auth endpoints
+	r.Post("/v1/auth/send-otp", handlers.SendOTPHandler(logger))
+	r.Post("/v1/auth/verify-otp", handlers.VerifyOTPHandler(logger))
 
 	// Language detection endpoint (public for now, can be moved to protected later)
 	r.Post("/v1/detect-language", func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +92,17 @@ func Setup(cfg *config.AppConfig, logger *zap.Logger, jobRepository *database.Fi
 
 		// Add rate limiting middleware if available
 		// r.Use(authmw.RateLimitMiddleware(cfg, logger))
+
+		// Project Management endpoints
+		r.Route("/v1/projects", func(r chi.Router) {
+			r.Get("/", handlers.ListProjectsHandler(logger, projectRepository))
+			r.Post("/", handlers.CreateProjectHandler(logger, projectRepository))
+			r.Get("/{projectID}", handlers.GetProjectHandler(logger, projectRepository))
+			r.Put("/{projectID}", handlers.UpdateProjectHandler(logger, projectRepository))
+			r.Delete("/{projectID}", handlers.DeleteProjectHandler(logger, projectRepository))
+			r.Post("/{projectID}/generate", handlers.ProjectGenerateHandler(logger, projectRepository, jobRepository))
+			r.Post("/{projectID}/export", handlers.ProjectExportHandler(logger, projectRepository))
+		})
 
 		// TTS Generation endpoint
 		r.Post("/v1/generate", handlers.GenerateHandler(logger, jobRepository))

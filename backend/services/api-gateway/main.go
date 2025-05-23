@@ -14,6 +14,7 @@ import (
 
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/config"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/database"
+	"github.com/NavoDayAI/vaani/backend/services/api-gateway/handlers"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/router"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/services"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/utils/langdetect"
@@ -48,6 +49,7 @@ func main() {
 
 	var firestoreClient *database.FirestoreClient
 	var jobRepository *database.FirestoreJobRepository
+	var projectRepository *database.FirestoreProjectRepository
 	var ttsClient *services.TTSClient
 	var jobProcessor *services.JobProcessor
 
@@ -58,9 +60,10 @@ func main() {
 			zap.Error(err))
 	} else {
 		defer firestoreClient.Close()
-		// Initialize job repository
+		// Initialize repositories
 		jobRepository = database.NewFirestoreJobRepository(firestoreClient, logger)
-		logger.Info("Firestore client and job repository initialized successfully")
+		projectRepository = database.NewFirestoreProjectRepository(firestoreClient, logger)
+		logger.Info("Firestore client and repositories initialized successfully")
 
 		// Initialize TTS client
 		bulbulURL := getEnv("BULBUL_ADAPTER_URL", "http://localhost:8082")
@@ -83,9 +86,9 @@ func main() {
 
 	// Set up the router with or without Firebase support
 	var r http.Handler
-	if firestoreClient != nil && jobRepository != nil {
-		// Use full router with auth and job repository
-		r = router.Setup(cfg, logger, jobRepository)
+	if firestoreClient != nil && jobRepository != nil && projectRepository != nil {
+		// Use full router with auth and repositories
+		r = router.Setup(cfg, logger, jobRepository, projectRepository)
 		logger.Info("Using full router configuration with authentication")
 	} else {
 		// Use limited router without Firebase dependencies
@@ -160,6 +163,10 @@ func setupBasicRouter(logger *zap.Logger) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+
+	// Auth endpoints
+	r.Post("/v1/auth/send-otp", handlers.SendOTPHandler(logger))
+	r.Post("/v1/auth/verify-otp", handlers.VerifyOTPHandler(logger))
 
 	// Language detection endpoint
 	r.Post("/v1/detect-language", func(w http.ResponseWriter, r *http.Request) {

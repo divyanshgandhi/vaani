@@ -9,6 +9,7 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/config"
+	"github.com/golang-jwt/jwt/v4"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -23,6 +24,9 @@ const (
 	// UserPhoneKey is the key used to store the user phone in the request context
 	UserPhoneKey contextKey = "userPhone"
 )
+
+// JWT secret - in production, use environment variable or secure key management
+var jwtSecret = []byte("your-secret-key-change-this-in-production")
 
 // FirebaseAuthMiddleware validates Firebase JWTs in the Authorization header
 func FirebaseAuthMiddleware(cfg *config.AppConfig, logger *zap.Logger) func(http.Handler) http.Handler {
@@ -101,18 +105,24 @@ func firebaseAuthMiddlewareWithInit(cfg *config.AppConfig, logger *zap.Logger, t
 				return
 			}
 
-			// Verify the token using the Firebase Auth client
-			token, err := client.VerifyIDToken(r.Context(), idToken)
+			// Try to verify as custom JWT first
+			userID, email, phone, err := verifyCustomJWT(idToken, logger)
 			if err != nil {
-				logger.Error("Failed to verify ID token", zap.Error(err))
-				http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
-				return
-			}
+				// If custom JWT verification fails, try Firebase JWT
+				token, fbErr := client.VerifyIDToken(r.Context(), idToken)
+				if fbErr != nil {
+					logger.Error("Failed to verify both custom and Firebase tokens",
+						zap.Error(err),
+						zap.Error(fbErr))
+					http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+					return
+				}
 
-			// Extract user info
-			userID := token.UID
-			email, _ := token.Claims["email"].(string)
-			phone, _ := token.Claims["phone_number"].(string)
+				// Extract user info from Firebase token
+				userID = token.UID
+				email, _ = token.Claims["email"].(string)
+				phone, _ = token.Claims["phone_number"].(string)
+			}
 
 			// Add user info to context
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
@@ -164,4 +174,40 @@ func extractToken(authHeader string) string {
 	}
 
 	return parts[1]
+}
+
+// verifyCustomJWT verifies our custom JWT tokens and returns user info
+func verifyCustomJWT(tokenString string, logger *zap.Logger) (userID, email, phone string, err error) {
+	// Parse the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Make sure token's signature algorithm is what we expect
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return "", "", "", err
+	}
+
+	// Check if token is valid
+	if !token.Valid {
+		return "", "", "", errors.New("invalid token")
+	}
+
+	// Extract claims
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", "", errors.New("invalid token claims")
+	}
+
+	// Extract phone number (which is our user ID for custom JWT)
+	phoneNumber, ok := claims["phone_number"].(string)
+	if !ok || phoneNumber == "" {
+		return "", "", "", errors.New("phone number not found in token")
+	}
+
+	// For custom JWT, use phone number as both userID and phone
+	return phoneNumber, "", phoneNumber, nil
 }

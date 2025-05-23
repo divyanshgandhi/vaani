@@ -22,8 +22,8 @@ import (
 const (
 	// DefaultPort is the default port the service runs on
 	DefaultPort = "8082"
-	// Default Bulbul API URL
-	DefaultBulbulAPIURL = "https://api.bulbul.ai/v1/tts"
+	// Sarvam TTS API URL - Updated to use correct Sarvam endpoint
+	SarvamTTSAPIURL = "https://api.sarvam.ai/text-to-speech"
 )
 
 // TTSRequest represents a text-to-speech request
@@ -41,6 +41,24 @@ type TTSResponse struct {
 	AudioURL string  `json:"audio_url"`
 	Duration float64 `json:"duration,omitempty"`
 	Format   string  `json:"format,omitempty"`
+}
+
+// SarvamTTSRequest represents the request format for Sarvam TTS API
+type SarvamTTSRequest struct {
+	Inputs              []string `json:"inputs"`
+	TargetLanguageCode  string   `json:"target_language_code"`
+	Speaker             string   `json:"speaker,omitempty"`
+	Pitch               float64  `json:"pitch,omitempty"`
+	Pace                float64  `json:"pace,omitempty"`
+	Loudness            float64  `json:"loudness,omitempty"`
+	SpeechSampleRate    int      `json:"speech_sample_rate,omitempty"`
+	EnablePreprocessing bool     `json:"enable_preprocessing"`
+	Model               string   `json:"model"`
+}
+
+// SarvamTTSResponse represents the response format from Sarvam TTS API
+type SarvamTTSResponse struct {
+	Audios []string `json:"audios"`
 }
 
 func main() {
@@ -165,7 +183,7 @@ func handleTTS(logger *zap.Logger) http.HandlerFunc {
 			return
 		}
 
-		// Call Sarvam Bulbul API
+		// Call Sarvam TTS API
 		response, err := callSarvamAPI(request, apiKey, logger)
 		if err != nil {
 			logger.Error("Failed to call Sarvam API", zap.Error(err))
@@ -180,25 +198,25 @@ func handleTTS(logger *zap.Logger) http.HandlerFunc {
 	}
 }
 
-// callSarvamAPI calls the Sarvam Bulbul API
+// callSarvamAPI calls the Sarvam TTS API with correct format
 func callSarvamAPI(request TTSRequest, apiKey string, logger *zap.Logger) (*TTSResponse, error) {
-	// Prepare Sarvam API request
-	sarvamRequest := map[string]interface{}{
-		"text":     request.Text,
-		"language": request.Language,
-		"speaker":  request.VoiceID,
-	}
+	// Map our voice IDs to Sarvam speakers
+	speaker := mapVoiceToSarvamSpeaker(request.VoiceID)
 
-	// Add emotion/style if provided
-	if request.Emotion > 0 {
-		// Map emotion (0-100) to Sarvam style
-		style := "neutral"
-		if request.Emotion > 70 {
-			style = "excited"
-		} else if request.Emotion > 40 {
-			style = "happy"
-		}
-		sarvamRequest["style"] = style
+	// Map our language codes to Sarvam language codes
+	languageCode := mapLanguageToSarvamCode(request.Language)
+
+	// Prepare Sarvam API request according to documentation
+	sarvamRequest := SarvamTTSRequest{
+		Inputs:              []string{request.Text},
+		TargetLanguageCode:  languageCode,
+		Speaker:             speaker,
+		Pitch:               request.Pitch,
+		Pace:                request.Speed,
+		Loudness:            1.5,   // Default loudness
+		SpeechSampleRate:    22050, // Default sample rate
+		EnablePreprocessing: true,
+		Model:               "bulbul:v1",
 	}
 
 	// Marshal request
@@ -207,14 +225,17 @@ func callSarvamAPI(request TTSRequest, apiKey string, logger *zap.Logger) (*TTSR
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	logger.Debug("Sarvam API request", zap.String("body", string(requestBody)))
+
 	// Create HTTP request
-	req, err := http.NewRequest("POST", DefaultBulbulAPIURL, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest("POST", SarvamTTSAPIURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// Set correct headers according to Sarvam documentation
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Sarvam-Key", apiKey)
+	req.Header.Set("api-subscription-key", apiKey)
 
 	// Send request
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -225,64 +246,109 @@ func callSarvamAPI(request TTSRequest, apiKey string, logger *zap.Logger) (*TTSR
 	defer resp.Body.Close()
 
 	// Parse response
-	var sarvamResponse map[string]interface{}
+	var sarvamResponse SarvamTTSResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sarvamResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Sarvam API error: %v", sarvamResponse)
+		return nil, fmt.Errorf("Sarvam API error (status %d): %v", resp.StatusCode, sarvamResponse)
 	}
 
-	// Extract audio URL from response
-	audioURL, ok := sarvamResponse["audio_url"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid response format: missing audio_url")
+	// Validate response
+	if len(sarvamResponse.Audios) == 0 {
+		return nil, fmt.Errorf("no audio generated")
 	}
 
-	// Extract duration if available
-	duration := float64(len(request.Text)) / 20.0 // Default estimate
-	if d, ok := sarvamResponse["duration"].(float64); ok {
-		duration = d
-	}
+	// The audio is base64 encoded, we need to save it and return URL
+	// For now, return the base64 data directly (in production, save to storage)
+	audioURL := fmt.Sprintf("data:audio/wav;base64,%s", sarvamResponse.Audios[0])
+
+	// Estimate duration (characters / 20 = rough seconds)
+	duration := float64(len(request.Text)) / 20.0
 
 	return &TTSResponse{
 		AudioURL: audioURL,
 		Duration: duration,
-		Format:   "mp3",
+		Format:   "wav",
 	}, nil
+}
+
+// mapVoiceToSarvamSpeaker maps our voice IDs to Sarvam speaker names
+func mapVoiceToSarvamSpeaker(voiceID string) string {
+	switch voiceID {
+	case "hi_female_1":
+		return "meera"
+	case "hi_male_1":
+		return "arvind"
+	case "ta_female_1":
+		return "pavithra"
+	case "bn_female_1":
+		return "maitreyi"
+	default:
+		return "meera" // Default to meera
+	}
+}
+
+// mapLanguageToSarvamCode maps our language codes to Sarvam language codes
+func mapLanguageToSarvamCode(language string) string {
+	switch language {
+	case "hi":
+		return "hi-IN"
+	case "ta":
+		return "ta-IN"
+	case "bn":
+		return "bn-IN"
+	case "en":
+		return "en-IN"
+	case "gu":
+		return "gu-IN"
+	case "kn":
+		return "kn-IN"
+	case "ml":
+		return "ml-IN"
+	case "mr":
+		return "mr-IN"
+	case "od":
+		return "od-IN"
+	case "pa":
+		return "pa-IN"
+	case "te":
+		return "te-IN"
+	default:
+		return "hi-IN" // Default to Hindi
+	}
 }
 
 // handleGetVoices returns a list of supported voices
 func handleGetVoices(logger *zap.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// In a real implementation, this would dynamically fetch from Bulbul API
-		// For now, we'll return a hardcoded list of Indic voices
+		// Return voices compatible with Sarvam TTS
 		voices := []map[string]interface{}{
 			{
 				"id":          "hi_female_1",
-				"name":        "Priya",
+				"name":        "Meera",
 				"language":    "hi",
 				"gender":      "female",
 				"preview_url": "https://storage.vaani.app/samples/hi_female_1.mp3",
 			},
 			{
 				"id":          "hi_male_1",
-				"name":        "Rahul",
+				"name":        "Arvind",
 				"language":    "hi",
 				"gender":      "male",
 				"preview_url": "https://storage.vaani.app/samples/hi_male_1.mp3",
 			},
 			{
 				"id":          "ta_female_1",
-				"name":        "Anjali",
+				"name":        "Pavithra",
 				"language":    "ta",
 				"gender":      "female",
 				"preview_url": "https://storage.vaani.app/samples/ta_female_1.mp3",
 			},
 			{
 				"id":          "bn_female_1",
-				"name":        "Meera",
+				"name":        "Maitreyi",
 				"language":    "bn",
 				"gender":      "female",
 				"preview_url": "https://storage.vaani.app/samples/bn_female_1.mp3",
