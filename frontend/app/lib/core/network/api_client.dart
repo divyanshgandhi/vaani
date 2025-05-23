@@ -7,9 +7,9 @@ class ApiClient {
 
   ApiClient(this._dio) {
     // Use environment variable or default to local backend
-    final baseUrl = const String.fromEnvironment(
+    const baseUrl = String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://localhost:8090/v1',
+      defaultValue: 'http://localhost:8080/v1',
     );
 
     _dio.options.baseUrl = baseUrl;
