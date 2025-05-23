@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -143,16 +144,33 @@ func handleTTS(logger *zap.Logger) http.HandlerFunc {
 			zap.Int("text_length", len(request.Text)),
 		)
 
-		// In a real implementation, this would call the Bulbul API
-		// For now, we'll simulate a successful response
-		audioURL := fmt.Sprintf("https://storage.vaani.app/media/%s_%s.mp3",
-			request.Language, time.Now().Format("20060102150405"))
+		// Get Sarvam API key from environment
+		apiKey := os.Getenv("SARVAM_API_KEY")
+		if apiKey == "" {
+			logger.Warn("SARVAM_API_KEY not set, using mock response")
+			// Return mock response for development
+			audioURL := fmt.Sprintf("https://storage.vaani.app/media/%s_%s.mp3",
+				request.Language, time.Now().Format("20060102150405"))
 
-		// Return response
-		response := TTSResponse{
-			AudioURL: audioURL,
-			Duration: float64(len(request.Text)) / 20.0, // Rough estimate
-			Format:   "mp3",
+			response := TTSResponse{
+				AudioURL: audioURL,
+				Duration: float64(len(request.Text)) / 20.0,
+				Format:   "mp3",
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				logger.Error("Failed to encode response", zap.Error(err))
+			}
+			return
+		}
+
+		// Call Sarvam Bulbul API
+		response, err := callSarvamAPI(request, apiKey, logger)
+		if err != nil {
+			logger.Error("Failed to call Sarvam API", zap.Error(err))
+			http.Error(w, "Failed to generate TTS", http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -160,6 +178,79 @@ func handleTTS(logger *zap.Logger) http.HandlerFunc {
 			logger.Error("Failed to encode response", zap.Error(err))
 		}
 	}
+}
+
+// callSarvamAPI calls the Sarvam Bulbul API
+func callSarvamAPI(request TTSRequest, apiKey string, logger *zap.Logger) (*TTSResponse, error) {
+	// Prepare Sarvam API request
+	sarvamRequest := map[string]interface{}{
+		"text":     request.Text,
+		"language": request.Language,
+		"speaker":  request.VoiceID,
+	}
+
+	// Add emotion/style if provided
+	if request.Emotion > 0 {
+		// Map emotion (0-100) to Sarvam style
+		style := "neutral"
+		if request.Emotion > 70 {
+			style = "excited"
+		} else if request.Emotion > 40 {
+			style = "happy"
+		}
+		sarvamRequest["style"] = style
+	}
+
+	// Marshal request
+	requestBody, err := json.Marshal(sarvamRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", DefaultBulbulAPIURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Sarvam-Key", apiKey)
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Parse response
+	var sarvamResponse map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&sarvamResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Sarvam API error: %v", sarvamResponse)
+	}
+
+	// Extract audio URL from response
+	audioURL, ok := sarvamResponse["audio_url"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: missing audio_url")
+	}
+
+	// Extract duration if available
+	duration := float64(len(request.Text)) / 20.0 // Default estimate
+	if d, ok := sarvamResponse["duration"].(float64); ok {
+		duration = d
+	}
+
+	return &TTSResponse{
+		AudioURL: audioURL,
+		Duration: duration,
+		Format:   "mp3",
+	}, nil
 }
 
 // handleGetVoices returns a list of supported voices
