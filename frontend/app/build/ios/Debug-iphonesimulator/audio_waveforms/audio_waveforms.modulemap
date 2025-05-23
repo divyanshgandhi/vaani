@@ -1,0 +1,12 @@
+module audio_waveforms {
+  umbrella header "audio_waveforms-umbrella.h"
+
+  export *
+  module * { export * }
+}
+
+
+module audio_waveforms.Swift {
+  header "/Users/divyanshgandhi/Work/NavoDayAI/Experiences/Vaani/vaani/frontend/app/build/ios/Debug-iphonesimulator/audio_waveforms/Swift Compatibility Header/audio_waveforms-Swift.h"
+  requires objc
+}

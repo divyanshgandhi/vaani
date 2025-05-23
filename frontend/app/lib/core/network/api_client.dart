@@ -6,15 +6,23 @@ class ApiClient {
   final Dio _dio;
 
   ApiClient(this._dio) {
-    _dio.options.baseUrl = 'https://api.vaani.app/v1';
-    _dio.options.connectTimeout = const Duration(seconds: 10);
-    _dio.options.receiveTimeout = const Duration(seconds: 10);
+    // Use environment variable or default to local backend
+    final baseUrl = const String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: 'http://localhost:8090/v1',
+    );
+
+    _dio.options.baseUrl = baseUrl;
+    _dio.options.connectTimeout = const Duration(seconds: 30);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
     _dio.options.headers = {'Content-Type': 'application/json'};
 
     // Add interceptors for logging, authorization, etc.
     _dio.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
+      requestHeader: true,
+      responseHeader: false,
     ));
   }
 
@@ -29,7 +37,7 @@ class ApiClient {
         ))));
   }
 
-  // Example methods
+  // HTTP methods
   Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) {
     return _dio.get(path, queryParameters: queryParameters);
   }
@@ -44,5 +52,16 @@ class ApiClient {
 
   Future<Response> delete(String path) {
     return _dio.delete(path);
+  }
+
+  // WebSocket URL for preview functionality
+  String get webSocketBaseUrl {
+    final baseUrl = _dio.options.baseUrl;
+    if (baseUrl.startsWith('https://')) {
+      return baseUrl.replaceFirst('https://', 'wss://');
+    } else if (baseUrl.startsWith('http://')) {
+      return baseUrl.replaceFirst('http://', 'ws://');
+    }
+    return 'ws://localhost:8090/v1';
   }
 }

@@ -4,12 +4,15 @@ import 'package:dio/dio.dart';
 import 'package:vaani/core/network/api_client.dart';
 import 'package:vaani/data/repositories/auth_repository_impl.dart';
 import 'package:vaani/data/repositories/project_repository_impl.dart';
+import 'package:vaani/data/repositories/tts_repository_impl.dart';
 import 'package:vaani/domain/repositories/auth_repository.dart';
 import 'package:vaani/domain/repositories/project_repository.dart';
+import 'package:vaani/domain/repositories/tts_repository.dart';
 import 'package:vaani/presentation/blocs/auth/auth_bloc.dart';
 import 'package:vaani/presentation/blocs/project/project_bloc.dart';
 import 'package:vaani/presentation/blocs/theme/theme_bloc.dart';
 import 'package:vaani/presentation/blocs/language/language_bloc.dart';
+import 'package:vaani/presentation/blocs/tts/tts_bloc.dart';
 
 final GetIt getIt = GetIt.instance;
 
@@ -29,6 +32,10 @@ Future<void> initServiceLocator() async {
 
   getIt.registerLazySingleton<ProjectRepository>(
     () => ProjectRepositoryImpl(getIt<ApiClient>()),
+  );
+
+  getIt.registerLazySingleton<TtsRepository>(
+    () => TtsRepositoryImpl(getIt<ApiClient>()),
   );
 
   // Initialize auth interceptor
@@ -51,5 +58,9 @@ Future<void> initServiceLocator() async {
 
   getIt.registerFactory<ProjectBloc>(
     () => ProjectBloc(projectRepository: getIt<ProjectRepository>()),
+  );
+
+  getIt.registerFactory<TtsBloc>(
+    () => TtsBloc(ttsRepository: getIt<TtsRepository>()),
   );
 }

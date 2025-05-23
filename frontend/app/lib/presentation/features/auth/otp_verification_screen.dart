@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:vaani/presentation/blocs/auth/auth_bloc.dart';
-import 'package:vaani/presentation/features/home/home_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -65,13 +65,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthSuccess) {
-            // Navigate to home screen and clear the navigation stack
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (_) => const HomeScreen(),
-              ),
-              (route) => false,
-            );
+            // Use GoRouter to navigate to home and clear the navigation stack
+            context.go('/home');
           } else if (state is AuthFailure) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),

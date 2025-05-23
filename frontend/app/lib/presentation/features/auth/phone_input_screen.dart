@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import 'package:vaani/presentation/blocs/auth/auth_bloc.dart';
-import 'package:vaani/presentation/features/auth/otp_verification_screen.dart';
 
 class PhoneInputScreen extends StatefulWidget {
   const PhoneInputScreen({super.key});
@@ -48,13 +48,9 @@ class _PhoneInputScreenState extends State<PhoneInputScreen> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is OtpVerificationInProgress) {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => OtpVerificationScreen(
-                  phoneNumber: state.phoneNumber,
-                ),
-              ),
-            );
+            // Use GoRouter to navigate to OTP verification screen
+            context.push(
+                '/otp-verification?phone=${Uri.encodeComponent(state.phoneNumber)}');
           } else if (state is AuthFailure) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),

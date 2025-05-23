@@ -10,9 +10,11 @@ import 'package:vaani/presentation/blocs/project/project_event.dart';
 import 'package:vaani/presentation/blocs/theme/theme_bloc.dart';
 import 'package:vaani/presentation/blocs/language/language_bloc.dart';
 import 'package:vaani/presentation/features/auth/phone_input_screen.dart';
+import 'package:vaani/presentation/features/auth/otp_verification_screen.dart';
 import 'package:vaani/presentation/features/editor/editor_screen.dart';
 import 'package:vaani/presentation/features/home/home_screen.dart';
 import 'package:vaani/presentation/features/splash/splash_screen.dart';
+import 'package:vaani/presentation/features/tts/tts_demo_screen.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class VaaniApp extends StatefulWidget {
@@ -41,6 +43,13 @@ class _VaaniAppState extends State<VaaniApp> {
           builder: (context, state) => const PhoneInputScreen(),
         ),
         GoRoute(
+          path: '/otp-verification',
+          builder: (context, state) {
+            final phoneNumber = state.uri.queryParameters['phone'] ?? '';
+            return OtpVerificationScreen(phoneNumber: phoneNumber);
+          },
+        ),
+        GoRoute(
           path: '/home',
           builder: (context, state) => const HomeScreen(),
         ),
@@ -55,14 +64,21 @@ class _VaaniAppState extends State<VaaniApp> {
             return EditorScreen(projectId: projectId);
           },
         ),
+        GoRoute(
+          path: '/tts-demo',
+          builder: (context, state) => const TtsDemoScreen(),
+        ),
       ],
       redirect: (context, state) {
         final authState = context.read<AuthBloc>().state;
         final isLoginRoute = state.matchedLocation == '/login';
+        final isOtpRoute =
+            state.matchedLocation.startsWith('/otp-verification');
         final isSplashRoute = state.matchedLocation == '/splash';
+        final isTtsDemoRoute = state.matchedLocation == '/tts-demo';
 
-        // If we're at the splash screen, don't redirect
-        if (isSplashRoute) {
+        // If we're at the splash screen, TTS demo, or OTP verification, don't redirect
+        if (isSplashRoute || isTtsDemoRoute || isOtpRoute) {
           return null;
         }
 
