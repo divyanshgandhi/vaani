@@ -65,16 +65,14 @@ func TestFirebaseAuthMiddlewareUnauthorized(t *testing.T) {
 	cfg := &config.AppConfig{}
 	cfg.Firebase.ProjectID = "test-project"
 
-	// This test will fail if it actually tries to initialize Firebase,
-	// but it will demonstrate the middleware rejecting requests without tokens
-	middleware := FirebaseAuthMiddleware(cfg, logger)
+	// Use the test middleware that doesn't try to initialize Firebase
+	middleware := TestFirebaseAuthMiddleware(cfg, logger)
 
 	// Create a request with no Authorization header
 	req := httptest.NewRequest("GET", "/", nil)
 	rr := httptest.NewRecorder()
 
-	// This should run the middleware and reject the request,
-	// but not attempt to initialize Firebase since we don't have credentials
+	// This should run the middleware and reject the request
 	handler := middleware(nextHandler)
 	handler.ServeHTTP(rr, req)
 
@@ -83,4 +81,46 @@ func TestFirebaseAuthMiddlewareUnauthorized(t *testing.T) {
 		t.Errorf("handler returned wrong status code: got %v want %v",
 			status, http.StatusUnauthorized)
 	}
-} 
+}
+
+func TestFirebaseAuthMiddlewareAuthorized(t *testing.T) {
+	// Create a simple HTTP handler that we'll wrap with our middleware
+	var capturedUserID string
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, err := ExtractUserID(r)
+		if err == nil {
+			capturedUserID = userID
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Create a test logger
+	logger, _ := zap.NewDevelopment()
+
+	// Create a mock config
+	cfg := &config.AppConfig{}
+	cfg.Firebase.ProjectID = "test-project"
+
+	// Use the test middleware that doesn't try to initialize Firebase
+	middleware := TestFirebaseAuthMiddleware(cfg, logger)
+
+	// Create a request with a valid test token
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer test-valid-token")
+	rr := httptest.NewRecorder()
+
+	// This should run the middleware and accept the request
+	handler := middleware(nextHandler)
+	handler.ServeHTTP(rr, req)
+
+	// Check the response
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	// Check that the user ID was extracted
+	if capturedUserID != "test-user-id" {
+		t.Errorf("Expected user ID 'test-user-id', got %q", capturedUserID)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"github.com/NavoDayAI/vaani/backend/services/api-gateway/config"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
@@ -25,27 +26,53 @@ const (
 
 // FirebaseAuthMiddleware validates Firebase JWTs in the Authorization header
 func FirebaseAuthMiddleware(cfg *config.AppConfig, logger *zap.Logger) func(http.Handler) http.Handler {
-	// Initialize Firebase
+	return firebaseAuthMiddlewareWithInit(cfg, logger, false)
+}
+
+// TestFirebaseAuthMiddleware is used for testing - it doesn't initialize a real Firebase client
+func TestFirebaseAuthMiddleware(cfg *config.AppConfig, logger *zap.Logger) func(http.Handler) http.Handler {
+	return firebaseAuthMiddlewareWithInit(cfg, logger, true)
+}
+
+// firebaseAuthMiddlewareWithInit is the internal implementation with a test mode flag
+func firebaseAuthMiddlewareWithInit(cfg *config.AppConfig, logger *zap.Logger, testMode bool) func(http.Handler) http.Handler {
+	// Initialize Firebase app only if not in test mode
 	var app *firebase.App
+	var client *auth.Client
 	var err error
 
-	if cfg.Firebase.CredentialsFile != "" {
-		// Use service account credential file if provided
-		opt := option.WithCredentialsFile(cfg.Firebase.CredentialsFile)
-		app, err = firebase.NewApp(context.Background(), &firebase.Config{ProjectID: cfg.Firebase.ProjectID}, opt)
-	} else {
-		// Otherwise use application default credentials
-		app, err = firebase.NewApp(context.Background(), &firebase.Config{ProjectID: cfg.Firebase.ProjectID})
-	}
+	if !testMode {
+		// Validate configuration
+		if cfg.Firebase.ProjectID == "" {
+			logger.Fatal("Firebase project ID is required")
+		}
 
-	if err != nil {
-		logger.Fatal("Failed to initialize Firebase app", zap.Error(err))
-	}
+		// Initialize Firebase app
+		if cfg.Firebase.CredentialsFile != "" {
+			// Use service account credential file if provided
+			logger.Info("Using Firebase credentials file",
+				zap.String("file", cfg.Firebase.CredentialsFile),
+				zap.String("project_id", cfg.Firebase.ProjectID))
 
-	// Get the Auth client
-	client, err := app.Auth(context.Background())
-	if err != nil {
-		logger.Fatal("Failed to initialize Firebase Auth client", zap.Error(err))
+			opt := option.WithCredentialsFile(cfg.Firebase.CredentialsFile)
+			app, err = firebase.NewApp(context.Background(), &firebase.Config{ProjectID: cfg.Firebase.ProjectID}, opt)
+		} else {
+			// Otherwise use application default credentials
+			logger.Info("Using application default credentials",
+				zap.String("project_id", cfg.Firebase.ProjectID))
+
+			app, err = firebase.NewApp(context.Background(), &firebase.Config{ProjectID: cfg.Firebase.ProjectID})
+		}
+
+		if err != nil {
+			logger.Fatal("Failed to initialize Firebase app", zap.Error(err))
+		}
+
+		// Get the Auth client
+		client, err = app.Auth(context.Background())
+		if err != nil {
+			logger.Fatal("Failed to initialize Firebase Auth client", zap.Error(err))
+		}
 	}
 
 	// Return the middleware
@@ -60,7 +87,21 @@ func FirebaseAuthMiddleware(cfg *config.AppConfig, logger *zap.Logger) func(http
 				return
 			}
 
-			// Verify the token
+			// In test mode, always reject the token unless it's "test-valid-token"
+			if testMode {
+				if idToken == "test-valid-token" {
+					// Add dummy user info to context
+					ctx := context.WithValue(r.Context(), UserIDKey, "test-user-id")
+					ctx = context.WithValue(ctx, UserEmailKey, "test@example.com")
+					ctx = context.WithValue(ctx, UserPhoneKey, "+1234567890")
+					next.ServeHTTP(w, r.WithContext(ctx))
+				} else {
+					http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+				}
+				return
+			}
+
+			// Verify the token using the Firebase Auth client
 			token, err := client.VerifyIDToken(r.Context(), idToken)
 			if err != nil {
 				logger.Error("Failed to verify ID token", zap.Error(err))
@@ -123,4 +164,4 @@ func extractToken(authHeader string) string {
 	}
 
 	return parts[1]
-} 
+}

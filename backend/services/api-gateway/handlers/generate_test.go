@@ -45,7 +45,7 @@ func (m *MockJobRepository) ListJobs(projectID string, limit int) ([]*models.Job
 
 // Create a test context with a user ID for middleware
 func createTestContextWithUser(r *http.Request, userID string) *http.Request {
-	ctx := context.WithValue(r.Context(), middleware.UserContextKey, userID)
+	ctx := context.WithValue(r.Context(), middleware.UserIDKey, userID)
 	return r.WithContext(ctx)
 }
 
@@ -76,11 +76,11 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.JobID == "" {
 					t.Error("Expected job_id to be present")
 				}
-				
+
 				if resp.Status != "queued" {
 					t.Errorf("Expected status to be 'queued', got '%s'", resp.Status)
 				}
@@ -97,7 +97,7 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.Error != "database_error" {
 					t.Errorf("Expected error to be 'database_error', got '%s'", resp.Error)
 				}
@@ -114,7 +114,7 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.Error != "invalid_request" {
 					t.Errorf("Expected error to be 'invalid_request', got '%s'", resp.Error)
 				}
@@ -131,11 +131,11 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.Error != "invalid_parameter" {
 					t.Errorf("Expected error to be 'invalid_parameter', got '%s'", resp.Error)
 				}
-				
+
 				if resp.Field != "text" {
 					t.Errorf("Expected field to be 'text', got '%s'", resp.Field)
 				}
@@ -152,15 +152,15 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.Error != "invalid_parameter" {
 					t.Errorf("Expected error to be 'invalid_parameter', got '%s'", resp.Error)
 				}
-				
+
 				if resp.Field != "text" {
 					t.Errorf("Expected field to be 'text', got '%s'", resp.Field)
 				}
-				
+
 				if !strings.Contains(resp.Message, "exceeds maximum length") {
 					t.Errorf("Expected message to mention maximum length, got '%s'", resp.Message)
 				}
@@ -177,11 +177,11 @@ func TestGenerateHandler(t *testing.T) {
 				if err := json.Unmarshal(body, &resp); err != nil {
 					t.Fatalf("Failed to unmarshal response: %v", err)
 				}
-				
+
 				if resp.Error != "invalid_parameter" {
 					t.Errorf("Expected error to be 'invalid_parameter', got '%s'", resp.Error)
 				}
-				
+
 				if resp.Field != "voice_id" {
 					t.Errorf("Expected field to be 'voice_id', got '%s'", resp.Field)
 				}
@@ -205,7 +205,7 @@ func TestGenerateHandler(t *testing.T) {
 				t.Fatalf("Failed to create request: %v", err)
 			}
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			// Add user to context
 			if tc.userID != "" {
 				req = createTestContextWithUser(req, tc.userID)
@@ -227,4 +227,4 @@ func TestGenerateHandler(t *testing.T) {
 			tc.validateResp(t, rr.Body.Bytes())
 		})
 	}
-} 
+}

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -19,12 +20,12 @@ type RateLimitExceededResponse struct {
 
 // RateLimiter implements a token bucket rate limiting algorithm
 type RateLimiter struct {
-	tokens          map[string]int     // Number of tokens available for each user/IP
+	tokens          map[string]int       // Number of tokens available for each user/IP
 	lastRefill      map[string]time.Time // Time of last token refill for each user/IP
-	tokensPerSecond int                // Rate at which tokens are replenished
-	resetAfter      time.Duration      // Duration after which token count is reset
-	mu              sync.Mutex         // Mutex to protect shared state
-	logger          *zap.Logger        // Logger for rate limiting events
+	tokensPerSecond int                  // Rate at which tokens are replenished
+	resetAfter      time.Duration        // Duration after which token count is reset
+	mu              sync.Mutex           // Mutex to protect shared state
+	logger          *zap.Logger          // Logger for rate limiting events
 }
 
 // newRateLimiter creates a new rate limiter with the specified settings
@@ -75,7 +76,7 @@ func (rl *RateLimiter) allow(clientID string) (bool, int, time.Duration) {
 		// Calculate tokens to replenish based on time since last refill
 		elapsed := now.Sub(lastRefill).Seconds()
 		tokensToAdd := int(elapsed * float64(rl.tokensPerSecond))
-		
+
 		if tokensToAdd > 0 {
 			// Add tokens up to the maximum
 			rl.tokens[clientID] = min(rl.tokens[clientID]+tokensToAdd, rl.tokensPerSecond)
@@ -113,26 +114,44 @@ func RateLimitMiddleware(tokensPerSecond int, resetAfter time.Duration, logger *
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			clientID := getClientID(r)
-			
+			clientID := getClientIP(r)
+
 			allowed, remainingTokens, retryAfter := rl.allow(clientID)
-			
+
 			// Set rate limiting headers
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(tokensPerSecond))
 			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remainingTokens))
-			
+
 			if !allowed {
-				w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+				// Set Retry-After header in seconds, minimum 1 second
+				retryAfterSeconds := int(retryAfter.Seconds())
+				if retryAfterSeconds < 1 {
+					retryAfterSeconds = 1
+				}
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+
+				// Prepare the JSON response
+				response := RateLimitExceededResponse{
+					Error:          "Rate limit exceeded",
+					RequestsPerSec: tokensPerSecond,
+					ResetAfter:     int(resetAfter.Seconds()),
+					RetryAfter:     retryAfterSeconds,
+				}
+
+				// Set content type and status code
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte("Rate limit exceeded. Please try again later."))
-				
+
+				// Write JSON response
+				json.NewEncoder(w).Encode(response)
+
 				logger.Info("Rate limit exceeded",
 					zap.String("client_id", clientID),
 					zap.Duration("retry_after", retryAfter),
 				)
 				return
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -154,4 +173,4 @@ func getClientIP(r *http.Request) string {
 
 	// Fall back to RemoteAddr
 	return r.RemoteAddr
-} 
+}

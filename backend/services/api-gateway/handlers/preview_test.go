@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -165,4 +163,4 @@ func TestPreviewHandlerUnknownType(t *testing.T) {
 	if errorResp.Error != "Unknown message type" {
 		t.Errorf("Expected 'Unknown message type' error, got '%s'", errorResp.Error)
 	}
-} 
+}

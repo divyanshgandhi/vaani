@@ -7,12 +7,12 @@ import (
 
 // TokenBucket represents a token bucket rate limiter for a single user
 type TokenBucket struct {
-	capacity        int           // Maximum number of tokens
-	tokens          int           // Current token count
-	refillRate      int           // Tokens per second to refill
-	lastRefillTime  time.Time     // Last time tokens were refilled
-	resetAfter      time.Duration // Duration after which to fully reset the bucket
-	lastResetTime   time.Time     // Last time a full reset was performed
+	capacity       int           // Maximum number of tokens
+	tokens         int           // Current token count
+	refillRate     int           // Tokens per second to refill
+	lastRefillTime time.Time     // Last time tokens were refilled
+	resetAfter     time.Duration // Duration after which to fully reset the bucket
+	lastResetTime  time.Time     // Last time a full reset was performed
 }
 
 // UserRateLimiter maintains rate limiters for multiple users
@@ -55,14 +55,17 @@ func (l *UserRateLimiter) Allow(userID string) bool {
 	if !exists {
 		bucket = &TokenBucket{
 			capacity:       l.capacity,
-			tokens:         l.capacity,    // Start with full capacity
+			tokens:         l.capacity, // Start with full capacity
 			refillRate:     l.refillRate,
 			lastRefillTime: now,
 			resetAfter:     l.resetAfter,
 			lastResetTime:  now,
 		}
 		l.buckets[userID] = bucket
-		return true // First request is always allowed
+
+		// Consume a token for this request
+		bucket.tokens--
+		return true
 	}
 
 	// Check if we should perform a full reset
@@ -70,6 +73,9 @@ func (l *UserRateLimiter) Allow(userID string) bool {
 		bucket.tokens = l.capacity
 		bucket.lastRefillTime = now
 		bucket.lastResetTime = now
+
+		// Consume a token for this request
+		bucket.tokens--
 		return true
 	}
 
@@ -159,4 +165,4 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-} 
+}

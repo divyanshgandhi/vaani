@@ -2,13 +2,23 @@ package middleware
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"go.uber.org/zap"
 )
+
+// nopCloser is an io.ReadCloser with a no-op Close method
+type nopCloser struct {
+	io.Reader
+}
+
+// Close implements the io.Closer interface
+func (nopCloser) Close() error { return nil }
 
 func TestRateLimitMiddleware(t *testing.T) {
 	// Create a test logger
@@ -23,8 +33,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	// Apply rate limit middleware - 3 requests per second, reset after 5 seconds
 	rateLimitedHandler := RateLimitMiddleware(3, 5*time.Second, logger)(okHandler)
 
-	// Create a client with a fixed IP
-	client := &http.Client{}
+	// Create a function to make test requests
 	makeRequest := func(t *testing.T) (*http.Response, error) {
 		req, err := http.NewRequest("GET", "http://example.com/test", nil)
 		if err != nil {
@@ -40,7 +49,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		// Convert recorder to response
 		return &http.Response{
 			StatusCode: rr.Code,
-			Body:       httptest.NewRecorder().Body,
+			Body:       nopCloser{strings.NewReader(rr.Body.String())},
 			Header:     rr.Header(),
 		}, nil
 	}
@@ -74,10 +83,10 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 func TestGetClientIP(t *testing.T) {
 	tests := []struct {
-		name      string
-		headers   map[string]string
+		name       string
+		headers    map[string]string
 		remoteAddr string
-		expected  string
+		expected   string
 	}{
 		{
 			name: "X-Forwarded-For",
@@ -85,7 +94,7 @@ func TestGetClientIP(t *testing.T) {
 				"X-Forwarded-For": "203.0.113.195",
 			},
 			remoteAddr: "192.168.1.1:1234",
-			expected:  "203.0.113.195",
+			expected:   "203.0.113.195",
 		},
 		{
 			name: "X-Real-IP",
@@ -93,13 +102,13 @@ func TestGetClientIP(t *testing.T) {
 				"X-Real-IP": "203.0.113.195",
 			},
 			remoteAddr: "192.168.1.1:1234",
-			expected:  "203.0.113.195",
+			expected:   "203.0.113.195",
 		},
 		{
-			name:      "RemoteAddr only",
-			headers:   map[string]string{},
+			name:       "RemoteAddr only",
+			headers:    map[string]string{},
 			remoteAddr: "192.168.1.1:1234",
-			expected:  "192.168.1.1:1234",
+			expected:   "192.168.1.1:1234",
 		},
 		{
 			name: "Both headers, X-Forwarded-For takes precedence",
@@ -108,7 +117,7 @@ func TestGetClientIP(t *testing.T) {
 				"X-Real-IP":       "198.51.100.42",
 			},
 			remoteAddr: "192.168.1.1:1234",
-			expected:  "203.0.113.195",
+			expected:   "203.0.113.195",
 		},
 	}
 
@@ -116,11 +125,11 @@ func TestGetClientIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "http://example.com", nil)
 			req.RemoteAddr = tt.remoteAddr
-			
+
 			for k, v := range tt.headers {
 				req.Header.Set(k, v)
 			}
-			
+
 			ip := getClientIP(req)
 			if ip != tt.expected {
 				t.Errorf("getClientIP() = %v, want %v", ip, tt.expected)
@@ -178,4 +187,4 @@ func TestRateLimitExceededResponse(t *testing.T) {
 	if response.RetryAfter != 1 {
 		t.Errorf("Expected RetryAfter to be 1, got %d", response.RetryAfter)
 	}
-} 
+}
