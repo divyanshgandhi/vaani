@@ -1,0 +1,67 @@
+{
+  "@@locale": "en",
+  "appName": "Vaani",
+  "welcomeMessage": "Welcome to Vaani",
+  "loginTitle": "Login to your account",
+  "phoneNumberLabel": "Phone Number",
+  "enterOtp": "Enter OTP",
+  "verifyOtp": "Verify OTP",
+  "continueButton": "Continue",
+  "myProjects": "My Projects",
+  "newProject": "New Project",
+  "editScript": "Edit Script",
+  "previewVoice": "Preview Voice",
+  "exportAudio": "Export Audio",
+  "selectVoice": "Select Voice",
+  "emotionIntensity": "Emotion Intensity",
+  "characterCount": "Character Count: {count}",
+  "@characterCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "estimatedCost": "Estimated Cost: ₹{cost}",
+  "@estimatedCost": {
+    "placeholders": {
+      "cost": {
+        "type": "double",
+        "format": "decimalPattern",
+        "optionalParameters": {
+          "decimalDigits": 2
+        }
+      }
+    }
+  },
+  "playPreview": "Play Preview",
+  "stopPreview": "Stop",
+  "regenerate": "Regenerate",
+  "addBackgroundMusic": "Add Background Music",
+  "exportingAudio": "Exporting Audio...",
+  "shareAudio": "Share Audio",
+  "downloadComplete": "Download Complete",
+  "rateApp": "Rate App",
+  "quotaRemaining": "Quota: {minutes} min",
+  "@quotaRemaining": {
+    "placeholders": {
+      "minutes": {
+        "type": "double",
+        "format": "decimalPattern",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "buyWeekendPass": "Buy Weekend Pass",
+  "settings": "Settings",
+  "darkMode": "Dark Mode",
+  "language": "Language",
+  "errorNetworkTitle": "Network Error",
+  "errorNetworkMessage": "Please check your internet connection",
+  "retry": "Retry",
+  "cancel": "Cancel",
+  "save": "Save",
+  "done": "Done"
+} 
